@@ -8,16 +8,22 @@ use vga_buffer::Color;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    print!("{}", _info);
+    vga_buffer::foreground_color(Color::Red);
+    println!("{}", _info);
+
     loop {}
 }
 
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    println!("Hello world{}", "!");
+    vga_buffer::with_colors(Color::Blue, Color::Green, || {
+        print!("Hello world{}", "!");
+    });
 
-    panic!("foo");
+    println!();
+
+    panic!("WOOO");
 
     loop {}
 }

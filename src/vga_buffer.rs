@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
+    static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
         color_code: ColorCode::new(Color::Yellow, Color::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
@@ -21,6 +21,31 @@ macro_rules! print {
 macro_rules! println {
     () => ($crate::print!("\n"));
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+pub fn foreground_color(color: Color) {
+    let mut writer = WRITER.lock();
+    writer.color_code = writer.color_code.with_foreground(color);
+}
+
+pub fn background_color(color: Color) {
+    let mut writer = WRITER.lock();
+    writer.color_code = writer.color_code.with_background(color);
+}
+
+pub fn with_colors(foreground: Color, background: Color, block: impl Fn() -> ()) {
+    let initial_color_code = {
+        let writer = WRITER.lock();
+        writer.color_code
+    };
+
+    foreground_color(foreground);
+    background_color(background);
+
+    block();
+
+    let mut writer = WRITER.lock();
+    writer.color_code = initial_color_code;
 }
 
 #[doc(hidden)]
@@ -61,6 +86,14 @@ impl ColorCode {
     fn new(foreground: Color, background: Color) -> ColorCode {
         ColorCode((background as u8) << 4 | (foreground as u8))
     }
+
+    fn with_foreground(&self, foreground: Color) -> ColorCode {
+        ColorCode((0xf0 & self.0 as u8) | foreground as u8)
+    }
+
+    fn with_background(&self, background: Color) -> ColorCode {
+        ColorCode(((background as u8) << 4) | (0x0f & self.0 as u8) )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,7 +111,7 @@ struct Buffer {
     chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
 }
 
-pub struct Writer {
+struct Writer {
     column_position: usize,
     color_code: ColorCode,
     buffer: &'static mut Buffer,
